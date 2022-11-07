@@ -8,22 +8,60 @@ public class Player : NetworkBehaviour {
     public NetworkVariable<Vector3> PositionChange = new NetworkVariable<Vector3>();
     public NetworkVariable<Vector3> RotationChange = new NetworkVariable<Vector3>();
     public NetworkVariable<Color> PlayerColor = new NetworkVariable<Color>(Color.red);
+    public NetworkVariable<int> Score = new NetworkVariable<int>(50);
+
+    public TMPro.TMP_Text txtScoreDisplay;
 
     private GameManager _gameMgr;
     private Camera _camera;
     public float movementSpeed = .5f;
-    private float rotationSpeed = 1f;
+    private float rotationSpeed = 4f;
     private BulletSpawner _bulletSpawner;
+    public int playerActive = 0;
 
     private void Start() {
         ApplyPlayerColor();
         PlayerColor.OnValueChanged += OnPlayerColorChanged;
-        _bulletSpawner = transform.Find("RArm").transform.Find("BulletSpawner").GetComponent<BulletSpawner>();
+        
     }
 
     public override void OnNetworkSpawn() {
         _camera = transform.Find("Camera").GetComponent<Camera>();
         _camera.enabled = IsOwner;
+
+        Score.OnValueChanged += ClientOnScoreChanged;
+        _bulletSpawner = transform.Find("RArm").transform.Find("BulletSpawner").GetComponent<BulletSpawner>();
+        
+        if(IsHost)
+        {
+            _bulletSpawner.BulletDamage.Value = 1;
+        }
+        DisplayScore();
+    }
+
+    private void HostHandleDamageBoostPickup(Collider other)
+    {
+        if(!_bulletSpawner.IsAtMaxDamage())
+        {
+            _bulletSpawner.IncreaseDamage();
+            other.GetComponent<NetworkObject>().Despawn();
+        }
+    }
+
+    public void OnTriggerEnter(Collider other)
+    {
+        if(IsHost)
+        {
+            if(other.gameObject.CompareTag("DamageBoost"))
+            {
+                HostHandleDamageBoostPickup(other);
+            }
+        }
+    }
+
+    private void ClientOnScoreChanged(int previous, int current)
+    {
+        DisplayScore();
     }
 
 
@@ -35,10 +73,40 @@ public class Player : NetworkBehaviour {
         RotationChange.Value = rotChange;
     }
 
+    private void HostHandleBulletCollision(GameObject bullet)
+    {
+        Bullet bulletScript = bullet.GetComponent<Bullet>();
+        Score.Value -= bulletScript.Damage.Value;
 
-    public void OnPlayerColorChanged(Color previous, Color current) {
+        ulong owner = bullet.GetComponent<NetworkObject>().OwnerClientId;
+        Player otherPlayer = NetworkManager.Singleton.ConnectedClients[owner].PlayerObject.GetComponent<Player>();
+        otherPlayer.Score.Value += bulletScript.Damage.Value;
+
+        Destroy(bullet);
+    }
+
+    [ServerRpc]
+    public void RequestSetScoreServerRpc(int value)
+    {
+        Score.Value = value;
+    }
+
+    private void OnPlayerColorChanged(Color previous, Color current) {
         ApplyPlayerColor();
     }
+
+    public void OnCollisionEnter(Collision collision)
+    {
+        if(IsHost)
+        {
+            if(collision.gameObject.CompareTag("Bullet"))
+            {
+                HostHandleBulletCollision(collision.gameObject);
+            }
+        }
+    }
+
+
 
     public void ApplyPlayerColor() {
         GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
@@ -82,6 +150,29 @@ public class Player : NetworkBehaviour {
         if(!IsOwner || IsHost){
             transform.Translate(PositionChange.Value);
             transform.Rotate(RotationChange.Value);
+        }
+    }
+
+    public void DisplayScore()
+    {
+        
+        if(playerActive == 0)
+        {
+            if (Score.Value <= 0)
+            {
+                txtScoreDisplay.text = "Game Over";
+                txtScoreDisplay.color = Color.red;
+                playerActive = 1;
+                Destroy(_bulletSpawner);
+            }
+            else
+            {
+                txtScoreDisplay.text = Score.Value.ToString();
+            }
+        }
+        else
+        {
+            
         }
     }
 }
