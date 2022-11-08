@@ -151,28 +151,23 @@ public class Player : NetworkBehaviour {
             transform.Translate(PositionChange.Value);
             transform.Rotate(RotationChange.Value);
         }
+
+
     }
 
     public void DisplayScore()
     {
-        
-        if(playerActive == 0)
+        if (Score.Value <= 0)
         {
-            if (Score.Value <= 0)
-            {
-                txtScoreDisplay.text = "Game Over";
-                txtScoreDisplay.color = Color.red;
-                playerActive = 1;
-                Destroy(_bulletSpawner);
-            }
-            else
-            {
-                txtScoreDisplay.text = Score.Value.ToString();
-            }
+            txtScoreDisplay.text = "Game Over";
+            txtScoreDisplay.color = Color.red;
+            Destroy(_bulletSpawner);
+            System.Threading.Thread.Sleep(1000);
+            Destroy(gameObject);
         }
         else
         {
-            
+            txtScoreDisplay.text = Score.Value.ToString();
         }
     }
 }
