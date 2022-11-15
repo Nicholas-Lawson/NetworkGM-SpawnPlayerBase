@@ -5,12 +5,90 @@ using UnityEditor;
 using UnityEngine;
 
 public class GameData : NetworkBehaviour {
+
+    public class CommandLineArgs
+    {
+        private const string PRE = "--";
+
+        public DebugRunner.StartModes startMode = DebugRunner.StartModes.CHOOSE;
+        public string startScene = "Lobby";
+
+        public Dictionary<string, string> cmdArgs;
+    
+        public CommandLineArgs()
+        {
+            cmdArgs = GetCommandlineArgs();
+            PrintCommandLineArgs(cmdArgs);
+            ParseArgs(cmdArgs);
+        }
+
+        private Dictionary<string, string> GetCommandlineArgs()
+        {
+            Dictionary<string, string> argDictionary = new Dictionary<string, string>();
+            var args = System.Environment.GetCommandLineArgs();
+
+            for(int i = 0; i< args.Length; i++)
+            {
+                var arg = args[i].ToLower();
+                if(arg.StartsWith(PRE))
+                {
+                    arg = arg.Substring(PRE.Length);
+                    var value = i < args.Length - 1 ? args[i + 1] : null;
+                    value = (value?.StartsWith(PRE) ?? false) ? null : value;
+                    argDictionary.Add(arg, value);
+                }
+            }
+            return argDictionary;
+        }
+
+        private void ParseArgs(Dictionary<string, string> args)
+        {
+            if(!args.TryGetValue("start_scene", out startScene))
+            {
+                startScene = "Lobby";
+            }
+
+            string cmdStartMode = "";
+
+            if(args.TryGetValue("start_mode", out cmdStartMode))
+            {
+                if(cmdStartMode == "server")
+                {
+                    Debug.Log("Server not supported now.");
+                }
+                else if(cmdStartMode == "host")
+                {
+                    startMode = DebugRunner.StartModes.HOST;
+                }
+                else if(cmdStartMode == "client")
+                {
+                    startMode = DebugRunner.StartModes.CLIENT;
+                }
+            }
+
+        }
+
+        private void PrintCommandLineArgs(Dictionary<string, string> args)
+        {
+            foreach(KeyValuePair<string, string> kvp in args)
+            {
+                Debug.Log($"{kvp.Key} = {kvp.Value}");
+            }
+        }
+    }
+
+
+
     private static GameData _instance;
     public static GameData Instance {
         get {
             return _instance;
         }
     }
+
+    public static DebugRunner dbgRun = new DebugRunner();
+    public static CommandLineArgs cmdArgs = new CommandLineArgs();
+
 
     private int colorIndex = 0;
     private Color[] playerColors = new Color[] {
@@ -52,7 +130,6 @@ public class GameData : NetworkBehaviour {
         }
     }
 
-
     // --------------------------
     // Private
     // --------------------------
@@ -74,10 +151,7 @@ public class GameData : NetworkBehaviour {
     }
 
     private void HostOnClientDisconnected(ulong clientId) {
-        int index = FindPlayerIndex(clientId);
-        if (index != -1) {
-            allPlayers.RemoveAt(index);
-        }
+        RemovePlayerFromList(clientId);
     }
 
 
@@ -88,6 +162,14 @@ public class GameData : NetworkBehaviour {
         allPlayers.Add(new PlayerInfo(clientId, NextColor(), true));
     }
 
+    public void RemovePlayerFromList(ulong clientId)
+    {
+        int index = FindPlayerIndex(clientId);
+        if(index != -1)
+        {
+            allPlayers.RemoveAt(index);
+        }
+    }
 
     public int FindPlayerIndex(ulong clientId) {
         var idx = 0;
